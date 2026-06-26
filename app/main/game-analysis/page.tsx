@@ -452,7 +452,7 @@ const GameAnalyzer: React.FC = () => {
                             <motion.div
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                className="p-4 rounded-xl bg-linear-to-br from-[#FF4D00]/20 to-[#FF0000]/20 border border-[#FF4D00]/30 text-center w-full max-w-[32rem]"
+                                className="p-4 rounded-xl bg-linear-to-br from-[#FF4D00]/20 to-[#FF0000]/20 border border-[#FF4D00]/30 text-center w-full max-w-lg"
                             >
                                 <div className="text-xl font-bold text-orange-100">{gameStatus}</div>
                             </motion.div>
@@ -589,15 +589,15 @@ const GameAnalyzer: React.FC = () => {
                                                 </div>
                                                 <div className="flex-1 flex items-center gap-2 min-w-0">
                                                     {line.san && (
-                                                        <span className="font-mono text-orange-100 flex-shrink-0">{line.san}</span>
+                                                        <span className="font-mono text-orange-100 shrink-0">{line.san}</span>
                                                     )}
                                                     <span className="text-orange-200/60">→</span>
-                                                    <span className="font-mono text-yellow-300 flex-shrink-0">{line.bestmove}</span>
+                                                    <span className="font-mono text-yellow-300 shrink-0">{line.bestmove}</span>
                                                     <div className={`ml-auto font-mono font-bold ${scoreColor}`}>
                                                         {scoreText}
                                                     </div>
                                                 </div>
-                                                <div className="hidden md:block text-xs text-orange-200/40 truncate max-w-[150px]">
+                                                <div className="hidden md:block text-xs text-orange-200/40 truncate max-w-37.5">
                                                     {line.pv.join(' ')}
                                                 </div>
                                             </div>

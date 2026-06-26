@@ -360,12 +360,12 @@ const PuzzlesStreakTraining: React.FC = () => {
                 <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-[#FF0000]/20 rounded-full blur-3xl animate-pulse delay-1000" />
             </div>
             <div className="relative z-10 max-w-7xl mx-auto space-y-6">
-                <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-[#FF4D00] to-[#FF0000] bg-clip-text text-transparent">
+                <h1 className="text-3xl md:text-4xl font-bold bg-linear-to-r from-[#FF4D00] to-[#FF0000] bg-clip-text text-transparent">
                     Puzzle Streak Training
                 </h1>
 
                 {phase === "setup" ? (
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl mx-auto p-6 rounded-2xl backdrop-blur-sm bg-gradient-to-br from-[#FF4D00]/10 to-[#FF0000]/10 border border-[#FF4D00]/30 space-y-5">
+                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl mx-auto p-6 rounded-2xl backdrop-blur-sm bg-linear-to-br from-[#FF4D00]/10 to-[#FF0000]/10 border border-[#FF4D00]/30 space-y-5">
                         <h2 className="text-xl font-bold text-orange-100">Streak Settings</h2>
                         <div>
                             <label className="block text-sm text-orange-200/80 mb-1">Starting Rating</label>
@@ -405,7 +405,7 @@ const PuzzlesStreakTraining: React.FC = () => {
                             whileTap={{ scale: 0.98 }}
                             onClick={startSolving}
                             disabled={fetchLoading}
-                            className="w-full py-3 rounded-xl bg-gradient-to-r from-[#FF4D00] to-[#FF0000] text-white font-bold shadow-lg disabled:opacity-60"
+                            className="w-full py-3 rounded-xl bg-linear-to-r from-[#FF4D00] to-[#FF0000] text-white font-bold shadow-lg disabled:opacity-60"
                         >
                             {fetchLoading ? "Loading..." : "Start Streak"}
                         </motion.button>
@@ -413,13 +413,13 @@ const PuzzlesStreakTraining: React.FC = () => {
                 ) : (
                     <div className="flex flex-col lg:flex-row gap-6 items-start justify-center">
                         <div className="flex flex-col items-center gap-4 w-full lg:w-auto">
-                            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="rounded-xl overflow-hidden shadow-2xl border border-[#FF4D00]/30 bg-black/30 aspect-square w-[500px]">
+                            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="rounded-xl overflow-hidden shadow-2xl border border-[#FF4D00]/30 bg-black/30 aspect-square w-125">
                                 <LazyChessboard options={puzzleBoardOptions} />
                             </motion.div>
                         </div>
 
                         <div className="flex-1 flex flex-col gap-4 w-full max-w-xl">
-                            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="p-4 rounded-2xl backdrop-blur-sm bg-gradient-to-br from-[#FF4D00]/10 to-[#FF0000]/10 border border-[#FF4D00]/30">
+                            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="p-4 rounded-2xl backdrop-blur-sm bg-linear-to-br from-[#FF4D00]/10 to-[#FF0000]/10 border border-[#FF4D00]/30">
                                 <h2 className="text-sm font-bold text-orange-100 mb-3">Progress</h2>
                                 <div className="text-xs text-orange-200/70">
                                     Puzzle {currentIndex + 1} of {puzzles.length}
@@ -462,7 +462,7 @@ const PuzzlesStreakTraining: React.FC = () => {
                                         <button
                                             onClick={handleRepeatStreak}
                                             disabled={fetchLoading}
-                                            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-[#FF4D00] to-[#FF0000] text-white text-sm font-semibold transition disabled:opacity-50 w-fit"
+                                            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-linear-to-r from-[#FF4D00] to-[#FF0000] text-white text-sm font-semibold transition disabled:opacity-50 w-fit"
                                         >
                                             <FiRefreshCw size={14} /> Try again (rating -50)
                                         </button>
