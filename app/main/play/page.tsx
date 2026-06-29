@@ -565,7 +565,7 @@ export default function PlayVsEngine() {
             {/* Board + Clock + Eval */}
             <div className="flex flex-col items-center gap-4 w-full lg:w-auto">
               {/* Clocks */}
-              <div className="flex justify-between w-full max-w-125 text-sm font-mono">
+              <div className="flex justify-between w-full max-w-[90vw] md:max-w-[500px] text-sm font-mono">
                 <div className="flex items-center gap-2 text-orange-200">
                   <span className="text-xs uppercase">White</span>
                   <span className={game.turn() === 'w' && !gameOver ? 'text-white font-bold' : ''}>
@@ -584,13 +584,13 @@ export default function PlayVsEngine() {
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="rounded-xl overflow-hidden shadow-2xl border border-[#FF4D00]/30 bg-black/30 aspect-square w-125"
+                  className="rounded-xl overflow-hidden shadow-2xl border border-[#FF4D00]/30 bg-black/30 aspect-square w-[90vw] md:w-125"
                 >
                   <LazyChessboard options={boardOptions} />
                 </motion.div>
 
                 {/* Eval Bar */}
-                <div className="w-8 bg-black/30 rounded-r-xl border border-[#FF4D00]/30 border-l-0 overflow-hidden flex flex-col relative">
+                {/* <div className="w-8 bg-black/30 rounded-r-xl border border-[#FF4D00]/30 border-l-0 overflow-hidden flex flex-col relative">
                   <div className="absolute inset-0 bg-linear-to-t from-black/70 to-white/70 opacity-30" />
                   <div
                     className="w-full bg-white transition-all duration-300 ease-out"
@@ -599,12 +599,12 @@ export default function PlayVsEngine() {
                   <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white drop-shadow-[0_0_4px_black]">
                     {formatScore(evalScore)}
                   </div>
-                </div>
+                </div> */}
               </div>
 
               {/* Game status / engine thinking */}
               {status && (
-                <div className="p-3 rounded-xl bg-linear-to-br from-[#FF4D00]/20 to-[#FF0000]/20 border border-[#FF4D00]/30 text-center w-full max-w-125">
+                <div className="p-3 rounded-xl bg-linear-to-br from-[#FF4D00]/20 to-[#FF0000]/20 border border-[#FF4D00]/30 text-center w-full max-w-[90vw] md:max-w-[500px]">
                   <span className="font-bold text-orange-100">{status}</span>
                   {gameOver && (
                     <button

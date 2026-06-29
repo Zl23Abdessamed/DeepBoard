@@ -5,12 +5,13 @@ import { Chess } from 'chess.js';
 import type { Square } from 'chess.js';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaChessKnight, FaChessQueen, FaChessRook, FaChessBishop, FaAngleLeft, FaAngleRight, FaStepBackward, FaStepForward } from 'react-icons/fa';
-import { FiUpload } from 'react-icons/fi';
+import { FiCpu, FiUpload } from 'react-icons/fi';
 import type { ChessboardOptions, PieceRenderObject } from 'react-chessboard';
 import UploadPGNModal from '@/app/components/PgnModal';
 import dynamic from 'next/dynamic';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/app/redux/store';
+import { generateGeminiText, generateGroqText, generateOpenRouterText, generateCerebrasText } from '@/app/utils/ai';
 
 const LazyChessboard = dynamic(() =>
     import('react-chessboard').then((mod) => ({
@@ -51,9 +52,15 @@ const GameAnalyzer: React.FC = () => {
     });
     const [showUploadModal, setShowUploadModal] = useState(false);
 
+
     // PGN analysis integration
     const [analysisResults, setAnalysisResults] = useState<AnalysisResult[] | null>(null);
     const [analysisLoading, setAnalysisLoading] = useState(false);
+
+    const [aiExplanation, setAiExplanation] = useState<string | null>(null);
+    const [aiLoading, setAiLoading] = useState(false);
+    const [aiError, setAiError] = useState<string | null>(null);
+
 
     // Generate local piece images
     const generateLocalPieces = (style: string) => {
@@ -372,15 +379,66 @@ const GameAnalyzer: React.FC = () => {
         return (score / 100).toFixed(1);
     };
 
+    const handleExplainWithAI = async () => {
+        if (!analysisResults || analysisResults.length === 0) return;
+        setAiLoading(true);
+        setAiError(null);
+        setAiExplanation(null);
+
+        // Build a context prompt for the AI
+        const pgn = game.pgn();
+        const evaluationSummary = analysisResults
+            .map((m) => {
+                const score = m.score !== null ? (m.score / 100).toFixed(1) : '?';
+                return `Move ${m.moveNumber}: ${m.san || 'start'} | Best: ${m.bestmove} | Eval: ${score}`;
+            })
+            .join('\n');
+
+        const prompt = `You are a chess coach. The user has just analyzed a chess game using Stockfish. Below is the complete PGN followed by a move-by-move analysis summary.
+
+PGN:
+${pgn}
+
+Move-by-move analysis:
+${evaluationSummary}
+
+Please explain the key moments of this game in a clear, educational way. Highlight critical mistakes, brilliant moves, tactical themes, and suggest improvements. Keep it engaging and suitable for a club-level player.`;
+
+        // Try AI models in sequence
+        const models = [
+            { name: 'Gemini', generate: generateGeminiText },
+            { name: 'Groq', generate: generateGroqText },
+            { name: 'OpenRouter', generate: generateOpenRouterText },
+            { name: 'Cerebras', generate: generateCerebrasText },
+        ];
+
+        let lastError = '';
+        for (const model of models) {
+            try {
+                const response = await model.generate(prompt);
+                setAiExplanation(response);
+                setAiLoading(false);
+                return;
+            } catch (err: any) {
+                console.warn(`AI model ${model.name} failed:`, err.message);
+                lastError = err.message || 'Unknown error';
+            }
+        }
+
+        // All models failed
+        setAiError(`AI explanation failed: ${lastError}`);
+        setAiLoading(false);
+    };
+
     return (
         <div className="bg-black text-white min-h-screen p-6 overflow-hidden relative">
-            {/* Background glows */}
+            {/* Background glows – unchanged */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[#FF4D00]/20 rounded-full blur-3xl animate-pulse" />
                 <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-[#FF0000]/20 rounded-full blur-3xl animate-pulse delay-1000" />
             </div>
 
-            {/* Floating upload button */}
+            {/* Floating upload button – unchanged */}
             <motion.button
                 className="fixed cursor-pointer top-6 right-6 z-40 p-3 bg-linear-to-r from-[#FF4D00] to-[#FF0000] rounded-full shadow-lg shadow-[#FF4D00]/30 hover:shadow-[#FF4D00]/50 transition-all"
                 whileHover={{ scale: 1.1 }}
@@ -391,7 +449,19 @@ const GameAnalyzer: React.FC = () => {
                 <FiUpload className="text-white text-xl" />
             </motion.button>
 
-            {/* Upload PGN Modal */}
+            {analysisResults && !aiLoading && !aiExplanation && (
+                <motion.button
+                    className="fixed cursor-pointer top-24 right-6 z-40 p-3 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-full shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-all"
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={handleExplainWithAI}
+                    aria-label="Explain with AI"
+                >
+                    <FiCpu className="text-white text-xl" />
+                </motion.button>
+            )}
+
+            {/* Upload PGN Modal – unchanged */}
             <UploadPGNModal
                 isVisible={showUploadModal}
                 onClose={() => setShowUploadModal(false)}
@@ -400,7 +470,7 @@ const GameAnalyzer: React.FC = () => {
             />
 
             <div className="relative z-10 w-full max-w-7xl mx-auto space-y-6">
-                {/* Header */}
+                {/* Header – text size already responsive */}
                 <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
                     <h1 className="text-3xl md:text-4xl font-bold bg-linear-to-r from-[#FF4D00] to-[#FF0000] bg-clip-text text-transparent">
                         Game Analyzer
@@ -413,12 +483,12 @@ const GameAnalyzer: React.FC = () => {
                 <div className="flex flex-col lg:flex-row gap-6 items-start justify-center">
                     {/* Board + Eval Bar */}
                     <div className="flex flex-col items-center gap-4 w-full lg:w-auto">
-                        <div className="flex items-stretch gap-2 w-lg">
-                            {/* Chessboard */}
+                        <div className="flex items-stretch gap-2 w-full justify-center">
+                            {/* Chessboard – now responsive width */}
                             <motion.div
                                 initial={{ opacity: 0, scale: 0.95 }}
                                 animate={{ opacity: 1, scale: 1 }}
-                                className="rounded-xl overflow-hidden shadow-2xl border border-[#FF4D00]/30 bg-black/30 aspect-square w-full"
+                                className="rounded-xl overflow-hidden shadow-2xl border border-[#FF4D00]/30 bg-black/30 aspect-square w-[90vw] md:w-125"
                             >
                                 <Suspense
                                     fallback={
@@ -431,16 +501,13 @@ const GameAnalyzer: React.FC = () => {
                                 </Suspense>
                             </motion.div>
 
-                            {/* Eval Bar */}
+                            {/* Eval Bar – unchanged */}
                             <div className="w-8 bg-black/30 rounded-r-xl border border-[#FF4D00]/30 border-l-0 overflow-hidden flex flex-col relative">
-                                {/* Background gradient: black at bottom, white at top */}
                                 <div className="absolute inset-0 bg-linear-to-t from-black/70 to-white/70 opacity-30" />
-                                {/* Filled portion (white when advantage for white) */}
                                 <div
                                     className="w-full bg-white transition-all duration-300 ease-out"
                                     style={{ height: `${evalPercent}%` }}
                                 />
-                                {/* Score display */}
                                 <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white drop-shadow-[0_0_4px_black] pointer-events-none">
                                     {displayScore !== null ? formatScore(displayScore) : '?'}
                                 </div>
@@ -452,7 +519,7 @@ const GameAnalyzer: React.FC = () => {
                             <motion.div
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                className="p-4 rounded-xl bg-linear-to-br from-[#FF4D00]/20 to-[#FF0000]/20 border border-[#FF4D00]/30 text-center w-full max-w-lg"
+                                className="p-4 rounded-xl bg-linear-to-br from-[#FF4D00]/20 to-[#FF0000]/20 border border-[#FF4D00]/30 text-center w-full max-w-[90vw] md:max-w-[500px]"
                             >
                                 <div className="text-xl font-bold text-orange-100">{gameStatus}</div>
                             </motion.div>
@@ -461,34 +528,18 @@ const GameAnalyzer: React.FC = () => {
 
                     {/* Right panel: Move History + Engine Analysis */}
                     <div className="flex-1 flex flex-col gap-4 w-full max-w-xl">
-                        {/* Move Navigation */}
+                        {/* Move Navigation – unchanged */}
                         <div className="flex justify-center gap-2">
-                            <button
-                                onClick={goToStart}
-                                className="px-3 py-2 rounded-lg bg-black/40 border border-[#FF4D00]/30 hover:bg-[#FF4D00]/20 text-orange-100 font-bold transition"
-                                title="Go to start"
-                            >
+                            <button onClick={goToStart} className="px-3 py-2 rounded-lg bg-black/40 border border-[#FF4D00]/30 hover:bg-[#FF4D00]/20 text-orange-100 font-bold transition" title="Go to start">
                                 <FaStepBackward />
                             </button>
-                            <button
-                                onClick={prevMove}
-                                className="px-3 py-2 rounded-lg bg-black/40 border border-[#FF4D00]/30 hover:bg-[#FF4D00]/20 text-orange-100 font-bold transition"
-                                title="Previous move"
-                            >
+                            <button onClick={prevMove} className="px-3 py-2 rounded-lg bg-black/40 border border-[#FF4D00]/30 hover:bg-[#FF4D00]/20 text-orange-100 font-bold transition" title="Previous move">
                                 <FaAngleLeft />
                             </button>
-                            <button
-                                onClick={nextMove}
-                                className="px-3 py-2 rounded-lg bg-black/40 border border-[#FF4D00]/30 hover:bg-[#FF4D00]/20 text-orange-100 font-bold transition"
-                                title="Next move"
-                            >
+                            <button onClick={nextMove} className="px-3 py-2 rounded-lg bg-black/40 border border-[#FF4D00]/30 hover:bg-[#FF4D00]/20 text-orange-100 font-bold transition" title="Next move">
                                 <FaAngleRight />
                             </button>
-                            <button
-                                onClick={goToEnd}
-                                className="px-3 py-2 rounded-lg bg-black/40 border border-[#FF4D00]/30 hover:bg-[#FF4D00]/20 text-orange-100 font-bold transition"
-                                title="Go to end"
-                            >
+                            <button onClick={goToEnd} className="px-3 py-2 rounded-lg bg-black/40 border border-[#FF4D00]/30 hover:bg-[#FF4D00]/20 text-orange-100 font-bold transition" title="Go to end">
                                 <FaStepForward />
                             </button>
                             <span className="self-center text-sm text-orange-300/70 ml-2">
@@ -496,7 +547,7 @@ const GameAnalyzer: React.FC = () => {
                             </span>
                         </div>
 
-                        {/* Move History */}
+                        {/* Move History – text size already small */}
                         <motion.div
                             initial={{ opacity: 0, x: 20 }}
                             animate={{ opacity: 1, x: 0 }}
@@ -518,14 +569,12 @@ const GameAnalyzer: React.FC = () => {
                                                 <div className="w-8 text-[#FF4D00] font-semibold">{item.moveNumber}.</div>
                                                 <div className="flex-1 grid grid-cols-2 gap-2">
                                                     <div
-                                                        className={`font-mono text-orange-100 px-2 py-1 rounded ${currentMoveIndex === whiteMoveIdx ? 'bg-[#FF4D00]/30' : ''
-                                                            }`}
+                                                        className={`font-mono text-orange-100 px-2 py-1 rounded ${currentMoveIndex === whiteMoveIdx ? 'bg-[#FF4D00]/30' : ''}`}
                                                     >
                                                         {item.white || ''}
                                                     </div>
                                                     <div
-                                                        className={`font-mono text-orange-100 px-2 py-1 rounded ${currentMoveIndex === blackMoveIdx ? 'bg-[#FF4D00]/30' : ''
-                                                            }`}
+                                                        className={`font-mono text-orange-100 px-2 py-1 rounded ${currentMoveIndex === blackMoveIdx ? 'bg-[#FF4D00]/30' : ''}`}
                                                     >
                                                         {item.black || ''}
                                                     </div>
@@ -537,7 +586,7 @@ const GameAnalyzer: React.FC = () => {
                             </div>
                         </motion.div>
 
-                        {/* Engine Analysis */}
+                        {/* Engine Analysis – text size already small */}
                         <motion.div
                             initial={{ opacity: 0, x: 20 }}
                             animate={{ opacity: 1, x: 0 }}
@@ -546,7 +595,7 @@ const GameAnalyzer: React.FC = () => {
                         >
                             <h2 className="text-lg font-bold text-orange-100 mb-3">Engine Analysis</h2>
 
-                            {/* Loading state */}
+                            {/* Loading / empty states unchanged */}
                             {analysisLoading && (
                                 <div className="flex flex-col items-center justify-center py-8 space-y-3">
                                     <motion.div
@@ -558,14 +607,12 @@ const GameAnalyzer: React.FC = () => {
                                 </div>
                             )}
 
-                            {/* Empty state */}
                             {!analysisLoading && !analysisResults && (
                                 <div className="text-center text-orange-200/60 py-8">
                                     Click the upload button to import a PGN and see engine evaluations.
                                 </div>
                             )}
 
-                            {/* Analysis results */}
                             {!analysisLoading && analysisResults && analysisResults.length > 0 && (
                                 <div className="max-h-80 overflow-y-auto space-y-1">
                                     {analysisResults.map((line) => {
@@ -606,11 +653,43 @@ const GameAnalyzer: React.FC = () => {
                                 </div>
                             )}
                         </motion.div>
+
+                        {/* AI Explanation – placed right after Engine Analysis */}
+                        {(aiLoading || aiExplanation || aiError) && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="p-4 rounded-2xl backdrop-blur-sm bg-gradient-to-br from-purple-500/10 to-indigo-500/10 border border-purple-500/30 flex-1"
+                            >
+                                <h2 className="text-lg font-bold text-purple-200 mb-3">AI Game Explanation</h2>
+
+                                {aiLoading && (
+                                    <div className="flex flex-col items-center justify-center py-8 space-y-3">
+                                        <motion.div
+                                            animate={{ rotate: 360 }}
+                                            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                                            className="w-10 h-10 border-4 border-purple-400 border-t-transparent rounded-full"
+                                        />
+                                        <p className="text-purple-200/70 text-sm">AI is analyzing the game...</p>
+                                    </div>
+                                )}
+
+                                {aiError && (
+                                    <div className="text-red-400 text-sm">{aiError}</div>
+                                )}
+
+                                {aiExplanation && (
+                                    <div className="max-h-96 overflow-y-auto">
+                                        <div className="text-sm text-purple-100/90 whitespace-pre-wrap">{aiExplanation}</div>
+                                    </div>
+                                )}
+                            </motion.div>
+                        )}
                     </div>
                 </div>
             </div>
 
-            {/* Promotion Dialog */}
+            {/* Promotion Dialog – unchanged */}
             <AnimatePresence>
                 {showPromotionDialog && (
                     <motion.div

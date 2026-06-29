@@ -78,24 +78,24 @@ const TrainingColorSquares: React.FC = () => {
       arePiecesDraggable: false,
       squareStyles,
     }),
-    [squareStyles]
+    [squareStyles, reduxBoard.darkSquareColor, reduxBoard.lightSquareColor]
   );
 
   useEffect(() => {
     setCurrentSquare(randomSquare());
   }, []);
 
-  return (
+    return (
     <div className="bg-black text-white min-h-screen p-6 flex items-center justify-center overflow-hidden">
-      {/* Background glows */}
+      {/* Background glows unchanged */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[#FF4D00]/20 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-[#FF0000]/20 rounded-full blur-3xl animate-pulse delay-1000"></div>
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[#FF4D00]/20 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-[#FF0000]/20 rounded-full blur-3xl animate-pulse delay-1000" />
       </div>
 
       <div className="relative z-10 w-full max-w-5xl mx-auto space-y-6">
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <h1 className="text-3xl md:text-4xl font-bold bg-linear-to-r from-[#FF4D00] to-[#FF0000] bg-clip-text text-transparent">
+          <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-[#FF4D00] to-[#FF0000] bg-clip-text text-transparent">
             Color Square Training
           </h1>
           <Link
@@ -107,40 +107,44 @@ const TrainingColorSquares: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Controls card */}
-          <div className="p-6 rounded-2xl backdrop-blur-sm bg-linear-to-br from-[#FF4D00]/10 to-[#FF0000]/10 border border-[#FF4D00]/30 space-y-5">
-            <h2 className="text-xl font-semibold text-orange-100">Current Square</h2>
-            <div className="text-5xl md:text-6xl font-black text-[#FF4D00]">{currentSquare}</div>
+          {/* Controls card – compact on mobile */}
+          <div className="p-4 md:p-6 rounded-2xl backdrop-blur-sm bg-gradient-to-br from-[#FF4D00]/10 to-[#FF0000]/10 border border-[#FF4D00]/30 space-y-4">
+            <h2 className="text-lg md:text-xl font-semibold text-orange-100">
+              Current Square
+            </h2>
+            <div className="text-4xl md:text-6xl font-black text-[#FF4D00]">
+              {currentSquare}
+            </div>
 
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap gap-2 md:gap-3">
               <button
                 onClick={() => handleAnswer('dark')}
-                className="flex-1 min-w-25 px-4 py-3 rounded-xl bg-black/40 border border-[#FF4D00]/30 hover:bg-[#FF4D00]/20 text-orange-100 transition-colors"
+                className="flex-1 min-w-[80px] px-3 py-2 md:px-4 md:py-3 rounded-xl bg-black/40 border border-[#FF4D00]/30 hover:bg-[#FF4D00]/20 text-orange-100 transition-colors text-sm"
               >
                 Dark
               </button>
               <button
                 onClick={() => handleAnswer('light')}
-                className="flex-1 min-w-25 px-4 py-3 rounded-xl bg-black/40 border border-[#FF4D00]/30 hover:bg-[#FF4D00]/20 text-orange-100 transition-colors"
+                className="flex-1 min-w-[80px] px-3 py-2 md:px-4 md:py-3 rounded-xl bg-black/40 border border-[#FF4D00]/30 hover:bg-[#FF4D00]/20 text-orange-100 transition-colors text-sm"
               >
                 Light
               </button>
               <button
                 type="button"
                 onClick={() => setShowSolution((prev) => !prev)}
-                className="px-4 py-3 rounded-xl bg-black/40 border border-[#FF4D00]/30 hover:bg-[#FF4D00]/20 text-orange-100 transition-colors"
+                className="px-3 py-2 md:px-4 md:py-3 rounded-xl bg-black/40 border border-[#FF4D00]/30 hover:bg-[#FF4D00]/20 text-orange-100 transition-colors text-sm"
               >
-                {showSolution ? 'Hide solution' : 'Show solution'}
+                {showSolution ? 'Hide' : 'Show'}
               </button>
             </div>
 
             {feedback && (
-              <div className="text-sm text-orange-200/90 bg-black/30 px-3 py-2 rounded-lg">
+              <div className="text-xs md:text-sm text-orange-200/90 bg-black/30 px-3 py-2 rounded-lg">
                 {feedback}
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3 text-sm text-orange-200/80">
+            <div className="grid grid-cols-2 gap-2 text-xs md:text-sm text-orange-200/80">
               <div>
                 <span className="text-orange-400 font-semibold">{correctCount}</span> correct
               </div>
@@ -150,10 +154,10 @@ const TrainingColorSquares: React.FC = () => {
             </div>
           </div>
 
-          {/* Board card */}
-          <div className="p-6 rounded-2xl backdrop-blur-sm bg-linear-to-br from-[#FF4D00]/10 to-[#FF0000]/10 border border-[#FF4D00]/30">
-            <h2 className="text-xl font-semibold mb-4 text-orange-100">Board</h2>
-            <div className="rounded-2xl overflow-hidden border border-[#FF4D00]/20 bg-black/20">
+          {/* Board card – unchanged (already responsive) */}
+          <div className="p-4 md:p-6 rounded-2xl backdrop-blur-sm bg-gradient-to-br from-[#FF4D00]/10 to-[#FF0000]/10 border border-[#FF4D00]/30">
+            <h2 className="text-lg md:text-xl font-semibold mb-4 text-orange-100">Board</h2>
+            <div className="rounded-2xl overflow-hidden border border-[#FF4D00]/20 bg-black/20 max-w-[90vw] md:max-w-[400px] mx-auto">
               <Suspense
                 fallback={
                   <div className="aspect-square flex items-center justify-center text-orange-200/70">

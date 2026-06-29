@@ -152,6 +152,7 @@ const PuzzlesSetsTraining: React.FC = () => {
     const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const [fetchLoading, setFetchLoading] = useState(false);
+    
 
     const currentPuzzle = puzzles[currentIndex];
 
@@ -573,321 +574,324 @@ const PuzzlesSetsTraining: React.FC = () => {
     };
 
     return (
-        <div className="bg-black text-white min-h-screen p-6 overflow-hidden relative">
-            {/* Background glows */}
-            <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[#FF4D00]/20 rounded-full blur-3xl animate-pulse" />
-                <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-[#FF0000]/20 rounded-full blur-3xl animate-pulse delay-1000" />
+    <div className="bg-black text-white min-h-screen p-6 overflow-hidden relative">
+      {/* Background glows */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[#FF4D00]/20 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-[#FF0000]/20 rounded-full blur-3xl animate-pulse delay-1000" />
+      </div>
+
+      <div className="relative z-10 max-w-7xl mx-auto space-y-6">
+        <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-[#FF4D00] to-[#FF0000] bg-clip-text text-transparent">
+          Puzzle Sets Training
+        </h1>
+
+        {phase === "setup" ? (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="max-w-2xl mx-auto p-6 rounded-2xl backdrop-blur-sm bg-gradient-to-br from-[#FF4D00]/10 to-[#FF0000]/10 border border-[#FF4D00]/30 space-y-5"
+          >
+            <h2 className="text-xl font-bold text-orange-100">Create Your Puzzle Set</h2>
+
+            {/* Level Selector */}
+            <div>
+              <label className="block text-sm text-orange-200/80 mb-1">Level</label>
+              <select
+                value={level}
+                onChange={(e) => handleLevelChange(e.target.value)}
+                className="w-full bg-black/40 border border-[#FF4D00]/30 rounded-lg py-2 px-3 text-orange-100 text-sm"
+              >
+                {Object.entries(LEVEL_PRESETS).map(([key, preset]) => (
+                  <option key={key} value={key}>
+                    {preset.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            <div className="relative z-10 max-w-7xl mx-auto space-y-6">
-                <h1 className="text-3xl md:text-4xl font-bold bg-linear-to-r from-[#FF4D00] to-[#FF0000] bg-clip-text text-transparent">
-                    Puzzle Sets Training
-                </h1>
+            {/* Rating range */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-orange-200/80 mb-1">Min Rating</label>
+                <input
+                  type="number"
+                  value={minRatingInput}
+                  onChange={(e) => setMinRatingInput(e.target.value)}
+                  onBlur={handleMinBlur}
+                  onKeyDown={handleMinKeyDown}
+                  min={LEVEL_PRESETS[level].minBound}
+                  max={LEVEL_PRESETS[level].maxBound}
+                  className="w-full bg-black/40 border border-[#FF4D00]/30 rounded-lg py-2 px-3 text-orange-100 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-orange-200/80 mb-1">Max Rating</label>
+                <input
+                  type="number"
+                  value={maxRatingInput}
+                  onChange={(e) => setMaxRatingInput(e.target.value)}
+                  onBlur={handleMaxBlur}
+                  onKeyDown={handleMaxKeyDown}
+                  min={LEVEL_PRESETS[level].minBound}
+                  max={LEVEL_PRESETS[level].maxBound}
+                  className="w-full bg-black/40 border border-[#FF4D00]/30 rounded-lg py-2 px-3 text-orange-100 text-sm"
+                />
+              </div>
+            </div>
 
-                {phase === "setup" ? (
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="max-w-2xl mx-auto p-6 rounded-2xl backdrop-blur-sm bg-linear-to-br from-[#FF4D00]/10 to-[#FF0000]/10 border border-[#FF4D00]/30 space-y-5"
-                    >
-                        <h2 className="text-xl font-bold text-orange-100">Create Your Puzzle Set</h2>
-
-                        {/* Level Selector */}
-                        <div>
-                            <label className="block text-sm text-orange-200/80 mb-1">Level</label>
-                            <select
-                                value={level}
-                                onChange={(e) => handleLevelChange(e.target.value)}
-                                className="w-full bg-black/40 border border-[#FF4D00]/30 rounded-lg py-2 px-3 text-orange-100 text-sm"
-                            >
-                                {Object.entries(LEVEL_PRESETS).map(([key, preset]) => (
-                                    <option key={key} value={key}>
-                                        {preset.label}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        {/* Rating range */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm text-orange-200/80 mb-1">Min Rating</label>
-                                <input
-                                    type="number"
-                                    value={minRatingInput}
-                                    onChange={(e) => setMinRatingInput(e.target.value)}
-                                    onBlur={handleMinBlur}
-                                    onKeyDown={handleMinKeyDown}
-                                    min={LEVEL_PRESETS[level].minBound}
-                                    max={LEVEL_PRESETS[level].maxBound}
-                                    className="w-full bg-black/40 border border-[#FF4D00]/30 rounded-lg py-2 px-3 text-orange-100 text-sm"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm text-orange-200/80 mb-1">Max Rating</label>
-                                <input
-                                    type="number"
-                                    value={maxRatingInput}
-                                    onChange={(e) => setMaxRatingInput(e.target.value)}
-                                    onBlur={handleMaxBlur}
-                                    onKeyDown={handleMaxKeyDown}
-                                    min={LEVEL_PRESETS[level].minBound}
-                                    max={LEVEL_PRESETS[level].maxBound}
-                                    className="w-full bg-black/40 border border-[#FF4D00]/30 rounded-lg py-2 px-3 text-orange-100 text-sm"
-                                />
-                            </div>
-                        </div>
-
-                        {/* Themes multi-select with keyboard search */}
-                        <div>
-                            <label className="block text-sm text-orange-200/80 mb-1">Themes</label>
-                            <div ref={themesDropdownRef} className="relative">
-                                <button
-                                    type="button"
-                                    onClick={() => setThemesDropdownOpen((prev) => !prev)}
-                                    onKeyDown={handleThemesKeyDown}
-                                    className="w-full p-2 rounded bg-black/40 border border-[#FF4D00]/30 text-left text-sm flex justify-between items-center"
-                                >
-                                    <span className="truncate">
-                                        {selectedThemes.length === 0
-                                            ? "Select themes"
-                                            : `${selectedThemes.length} selected`}
-                                    </span>
-                                    <span>{themesDropdownOpen ? "▴" : "▾"}</span>
-                                </button>
-                                {themesDropdownOpen && (
-                                    <div className="absolute z-20 mt-2 w-full rounded-lg bg-black/95 border border-[#FF4D00]/30 shadow-lg p-2">
-                                        <div ref={themesListRef} className="max-h-44 overflow-y-auto space-y-1 pr-1">
-                                            {chessThemes.map((theme) => (
-                                                <label
-                                                    key={theme}
-                                                    className="flex items-center gap-2 text-xs px-2 py-1.5 rounded hover:bg-[#FF4D00]/10 cursor-pointer"
-                                                >
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selectedThemes.includes(theme)}
-                                                        onChange={() => toggleSelection(theme, setSelectedThemes)}
-                                                        className="accent-[#FF4D00]"
-                                                    />
-                                                    <span>{theme}</span>
-                                                </label>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Openings multi-select with keyboard search */}
-                        <div>
-                            <label className="block text-sm text-orange-200/80 mb-1">Openings</label>
-                            <div ref={openingsDropdownRef} className="relative">
-                                <button
-                                    type="button"
-                                    onClick={() => setOpeningsDropdownOpen((prev) => !prev)}
-                                    onKeyDown={handleOpeningsKeyDown}
-                                    className="w-full p-2 rounded bg-black/40 border border-[#FF4D00]/30 text-left text-sm flex justify-between items-center"
-                                >
-                                    <span className="truncate">
-                                        {selectedOpenings.length === 0
-                                            ? "Select openings"
-                                            : `${selectedOpenings.length} selected`}
-                                    </span>
-                                    <span>{openingsDropdownOpen ? "▴" : "▾"}</span>
-                                </button>
-                                {openingsDropdownOpen && (
-                                    <div className="absolute z-20 mt-2 w-full rounded-lg bg-black/95 border border-[#FF4D00]/30 shadow-lg p-2">
-                                        <input
-                                            className="w-full p-2 rounded bg-black/70 border border-[#FF4D00]/30 mb-2 text-sm"
-                                            placeholder="Search openings..."
-                                            value={openingsSearch}
-                                            onChange={(e) => setOpeningsSearch(e.target.value)}
-                                        />
-                                        <div className="text-xs text-orange-300/70 mb-1 px-1">
-                                            Showing {filteredOpenings.length} / {chessOpenings.length}
-                                        </div>
-                                        <div ref={openingsListRef} className="max-h-56 overflow-y-auto space-y-1 pr-1">
-                                            {filteredOpenings.map((opening) => (
-                                                <label
-                                                    key={opening}
-                                                    className="flex items-center gap-2 text-xs px-2 py-1.5 rounded hover:bg-[#FF4D00]/10 cursor-pointer"
-                                                >
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selectedOpenings.includes(opening)}
-                                                        onChange={() => toggleSelection(opening, setSelectedOpenings)}
-                                                        className="accent-[#FF4D00]"
-                                                    />
-                                                    <span>{opening}</span>
-                                                </label>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Puzzle count slider */}
-                        <div>
-                            <label className="block text-sm text-orange-200/80 mb-1">
-                                Puzzle Count: {puzzleCount}
-                            </label>
-                            <input
-                                type="range"
-                                min={1}
-                                max={100}
-                                value={puzzleCount}
-                                onChange={(e) => setPuzzleCount(Number(e.target.value))}
-                                className="w-full accent-[#FF4D00]"
-                            />
-                        </div>
-
-                        {/* Skip Mode Selector */}
-                        <div>
-                            <label className="block text-sm text-orange-200/80 mb-1">Skip Mode</label>
-                            <select
-                                value={skipMode}
-                                onChange={(e) => setSkipMode(e.target.value as "manual" | "automatic")}
-                                className="w-full bg-black/40 border border-[#FF4D00]/30 rounded-lg py-2 px-3 text-orange-100 text-sm"
-                            >
-                                <option value="manual">Manual</option>
-                                <option value="automatic">Automatic</option>
-                            </select>
-                        </div>
-
-                        <motion.button
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={startSolving}
-                            disabled={fetchLoading}
-                            className="w-full py-3 rounded-xl bg-linear-to-r from-[#FF4D00] to-[#FF0000] text-white font-bold shadow-lg disabled:opacity-60"
+            {/* Themes multi-select with keyboard search */}
+            <div>
+              <label className="block text-sm text-orange-200/80 mb-1">Themes</label>
+              <div ref={themesDropdownRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setThemesDropdownOpen((prev) => !prev)}
+                  onKeyDown={handleThemesKeyDown}
+                  className="w-full p-2 rounded bg-black/40 border border-[#FF4D00]/30 text-left text-sm flex justify-between items-center"
+                >
+                  <span className="truncate">
+                    {selectedThemes.length === 0
+                      ? "Select themes"
+                      : `${selectedThemes.length} selected`}
+                  </span>
+                  <span>{themesDropdownOpen ? "▴" : "▾"}</span>
+                </button>
+                {themesDropdownOpen && (
+                  <div className="absolute z-20 mt-2 w-full rounded-lg bg-black/95 border border-[#FF4D00]/30 shadow-lg p-2">
+                    <div ref={themesListRef} className="max-h-44 overflow-y-auto space-y-1 pr-1">
+                      {chessThemes.map((theme) => (
+                        <label
+                          key={theme}
+                          className="flex items-center gap-2 text-xs px-2 py-1.5 rounded hover:bg-[#FF4D00]/10 cursor-pointer"
                         >
-                            {fetchLoading ? "Loading puzzles..." : "Start Training"}
-                        </motion.button>
-                    </motion.div>
-                ) : (
-                    <div className="flex flex-col lg:flex-row gap-6 items-start justify-center">
-                        {/* Board + Timer */}
-                        <div className="flex flex-col items-center gap-4 w-full lg:w-auto">
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                className="rounded-xl overflow-hidden shadow-2xl border border-[#FF4D00]/30 bg-black/30 aspect-square w-125"
-                            >
-                                <LazyChessboard options={puzzleBoardOptions} />
-                            </motion.div>
-
-                            <div className="text-center space-y-2 w-full max-w-125">
-                                <div className="text-sm text-orange-200/70">
-                                    You are playing {playerOrientation === "white" ? "White" : "Black"}
-                                </div>
-                                <div className="text-sm text-orange-200/60">Elapsed</div>
-                                <div className="text-3xl font-mono text-orange-100">
-                                    {formatTime(puzzleElapsedMs)}
-                                </div>
-                                {lastSolveTimeMs !== null && (
-                                    <div className="text-sm text-orange-300/80">
-                                        Last solve: {formatTime(lastSolveTimeMs)}
-                                    </div>
-                                )}
-                                {feedback && (
-                                    <div className="text-sm text-orange-200/80 mt-1">{feedback}</div>
-                                )}
-                                {showSolution && currentPuzzle && (
-                                    <div className="mt-2 text-sm text-yellow-300">
-                                        Solution: {currentPuzzle.solution_moves_uci.join(" ")}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Right panel: Controls */}
-                        <div className="flex-1 flex flex-col gap-4 w-full max-w-xl">
-                            <motion.div
-                                initial={{ opacity: 0, x: 20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                className="p-4 rounded-2xl backdrop-blur-sm bg-linear-to-br from-[#FF4D00]/10 to-[#FF0000]/10 border border-[#FF4D00]/30"
-                            >
-                                <h2 className="text-sm font-bold text-orange-100 mb-3">Progress</h2>
-                                <div className="text-xs text-orange-200/70">
-                                    Puzzle {currentIndex + 1} of {puzzles.length}
-                                </div>
-
-                                {/* Navigation buttons */}
-                                <div className="flex gap-2 mt-4 flex-wrap">
-                                    <button
-                                        onClick={goToPrevPuzzle}
-                                        disabled={currentIndex === 0}
-                                        className="flex items-center gap-1 px-3 py-2 rounded-lg bg-black/40 border border-[#FF4D00]/30 hover:bg-[#FF4D00]/20 disabled:opacity-50 text-orange-100 text-sm transition"
-                                    >
-                                        <FiArrowLeft size={14} /> Previous
-                                    </button>
-                                    <button
-                                        onClick={goToNextPuzzle}
-                                        disabled={currentIndex >= puzzles.length - 1}
-                                        className="flex items-center gap-1 px-3 py-2 rounded-lg bg-black/40 border border-[#FF4D00]/30 hover:bg-[#FF4D00]/20 disabled:opacity-50 text-orange-100 text-sm transition"
-                                    >
-                                        Next <FiArrowRight size={14} />
-                                    </button>
-                                    <button
-                                        onClick={handleShowSolution}
-                                        disabled={showSolution || puzzleCompleted}
-                                        className="flex items-center gap-1 px-3 py-2 rounded-lg bg-black/40 border border-[#FF4D00]/30 hover:bg-[#FF4D00]/20 disabled:opacity-50 text-orange-100 text-sm transition"
-                                    >
-                                        <FiEye size={14} /> Show Solution
-                                    </button>
-                                </div>
-
-                                {/* Completion actions */}
-                                {puzzleCompleted && (
-                                    <div className="flex gap-2 mt-4">
-                                        <button
-                                            onClick={repeatPuzzle}
-                                            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-black/40 border border-[#FF4D00]/30 hover:bg-[#FF4D00]/20 text-orange-100 text-sm transition"
-                                        >
-                                            <FiRefreshCw /> Repeat
-                                        </button>
-                                        {currentIndex < puzzles.length - 1 && (
-                                            <button
-                                                onClick={goToNextPuzzle}
-                                                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-linear-to-r from-[#FF4D00] to-[#FF0000] text-white text-sm font-semibold transition"
-                                            >
-                                                <FiArrowRight /> Next
-                                            </button>
-                                        )}
-                                    </div>
-                                )}
-                            </motion.div>
-                            {/* Skip Mode toggle – now a nice switch */}
-                            <div className="flex items-center gap-2 mt-3">
-                                <span className="text-xs text-orange-200/80">Auto‑advance:</span>
-                                <button
-                                    onClick={() =>
-                                        setSkipMode(prev =>
-                                            prev === "manual" ? "automatic" : "manual"
-                                        )
-                                    }
-                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${skipMode === "automatic"
-                                            ? "bg-[#FF4D00]"
-                                            : "bg-black/40 border border-[#FF4D00]/30"
-                                        }`}
-                                >
-                                    <span
-                                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${skipMode === "automatic" ? "translate-x-6" : "translate-x-1"
-                                            }`}
-                                    />
-                                </button>
-                                <span className="text-xs text-orange-100/80 ml-1">
-                                    {skipMode === "automatic" ? "Automatic" : "Manual"}
-                                </span>
-                            </div>
-                        </div>
+                          <input
+                            type="checkbox"
+                            checked={selectedThemes.includes(theme)}
+                            onChange={() => toggleSelection(theme, setSelectedThemes)}
+                            className="accent-[#FF4D00]"
+                          />
+                          <span>{theme}</span>
+                        </label>
+                      ))}
                     </div>
+                  </div>
                 )}
+              </div>
             </div>
-        </div>
-    );
+
+            {/* Openings multi-select with keyboard search */}
+            <div>
+              <label className="block text-sm text-orange-200/80 mb-1">Openings</label>
+              <div ref={openingsDropdownRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setOpeningsDropdownOpen((prev) => !prev)}
+                  onKeyDown={handleOpeningsKeyDown}
+                  className="w-full p-2 rounded bg-black/40 border border-[#FF4D00]/30 text-left text-sm flex justify-between items-center"
+                >
+                  <span className="truncate">
+                    {selectedOpenings.length === 0
+                      ? "Select openings"
+                      : `${selectedOpenings.length} selected`}
+                  </span>
+                  <span>{openingsDropdownOpen ? "▴" : "▾"}</span>
+                </button>
+                {openingsDropdownOpen && (
+                  <div className="absolute z-20 mt-2 w-full rounded-lg bg-black/95 border border-[#FF4D00]/30 shadow-lg p-2">
+                    <input
+                      className="w-full p-2 rounded bg-black/70 border border-[#FF4D00]/30 mb-2 text-sm"
+                      placeholder="Search openings..."
+                      value={openingsSearch}
+                      onChange={(e) => setOpeningsSearch(e.target.value)}
+                    />
+                    <div className="text-xs text-orange-300/70 mb-1 px-1">
+                      Showing {filteredOpenings.length} / {chessOpenings.length}
+                    </div>
+                    <div ref={openingsListRef} className="max-h-56 overflow-y-auto space-y-1 pr-1">
+                      {filteredOpenings.map((opening) => (
+                        <label
+                          key={opening}
+                          className="flex items-center gap-2 text-xs px-2 py-1.5 rounded hover:bg-[#FF4D00]/10 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedOpenings.includes(opening)}
+                            onChange={() => toggleSelection(opening, setSelectedOpenings)}
+                            className="accent-[#FF4D00]"
+                          />
+                          <span>{opening}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Puzzle count slider */}
+            <div>
+              <label className="block text-sm text-orange-200/80 mb-1">
+                Puzzle Count: {puzzleCount}
+              </label>
+              <input
+                type="range"
+                min={1}
+                max={100}
+                value={puzzleCount}
+                onChange={(e) => setPuzzleCount(Number(e.target.value))}
+                className="w-full accent-[#FF4D00]"
+              />
+            </div>
+
+            {/* Skip Mode Selector */}
+            <div>
+              <label className="block text-sm text-orange-200/80 mb-1">Skip Mode</label>
+              <select
+                value={skipMode}
+                onChange={(e) => setSkipMode(e.target.value as "manual" | "automatic")}
+                className="w-full bg-black/40 border border-[#FF4D00]/30 rounded-lg py-2 px-3 text-orange-100 text-sm"
+              >
+                <option value="manual">Manual</option>
+                <option value="automatic">Automatic</option>
+              </select>
+            </div>
+
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={startSolving}
+              disabled={fetchLoading}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-[#FF4D00] to-[#FF0000] text-white font-bold shadow-lg disabled:opacity-60"
+            >
+              {fetchLoading ? "Loading puzzles..." : "Start Training"}
+            </motion.button>
+          </motion.div>
+        ) : (
+          <div className="flex flex-col lg:flex-row gap-6 items-start justify-center">
+            {/* Board + Timer */}
+            <div className="flex flex-col items-center gap-4 w-full lg:w-auto">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="rounded-xl overflow-hidden shadow-2xl border border-[#FF4D00]/30 bg-black/30 aspect-square w-[90vw] md:w-125"
+              >
+                <LazyChessboard options={puzzleBoardOptions} />
+              </motion.div>
+              
+
+              <div className="text-center space-y-2 w-[90vw] md:w-125">
+                <div className="text-sm text-orange-200/70">
+                  You are playing {playerOrientation === "white" ? "White" : "Black"}
+                </div>
+                <div className="text-sm text-orange-200/60">Elapsed</div>
+                <div className="text-3xl font-mono text-orange-100">
+                  {formatTime(puzzleElapsedMs)}
+                </div>
+                {lastSolveTimeMs !== null && (
+                  <div className="text-sm text-orange-300/80">
+                    Last solve: {formatTime(lastSolveTimeMs)}
+                  </div>
+                )}
+                {feedback && (
+                  <div className="text-sm text-orange-200/80 mt-1">{feedback}</div>
+                )}
+                {showSolution && currentPuzzle && (
+                  <div className="mt-2 text-sm text-yellow-300">
+                    Solution: {currentPuzzle.solution_moves_uci.join(" ")}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right panel: Controls */}
+            <div className="flex-1 flex flex-col gap-4 w-full max-w-xl">
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="p-4 rounded-2xl backdrop-blur-sm bg-gradient-to-br from-[#FF4D00]/10 to-[#FF0000]/10 border border-[#FF4D00]/30"
+              >
+                <h2 className="text-sm font-bold text-orange-100 mb-3">Progress</h2>
+                <div className="text-xs text-orange-200/70">
+                  Puzzle {currentIndex + 1} of {puzzles.length}
+                </div>
+
+                {/* Navigation buttons */}
+                <div className="flex gap-2 mt-4 flex-wrap">
+                  <button
+                    onClick={goToPrevPuzzle}
+                    disabled={currentIndex === 0}
+                    className="flex items-center gap-1 px-3 py-2 rounded-lg bg-black/40 border border-[#FF4D00]/30 hover:bg-[#FF4D00]/20 disabled:opacity-50 text-orange-100 text-sm transition"
+                  >
+                    <FiArrowLeft size={14} /> Previous
+                  </button>
+                  <button
+                    onClick={goToNextPuzzle}
+                    disabled={currentIndex >= puzzles.length - 1}
+                    className="flex items-center gap-1 px-3 py-2 rounded-lg bg-black/40 border border-[#FF4D00]/30 hover:bg-[#FF4D00]/20 disabled:opacity-50 text-orange-100 text-sm transition"
+                  >
+                    Next <FiArrowRight size={14} />
+                  </button>
+                  <button
+                    onClick={handleShowSolution}
+                    disabled={showSolution || puzzleCompleted}
+                    className="flex items-center gap-1 px-3 py-2 rounded-lg bg-black/40 border border-[#FF4D00]/30 hover:bg-[#FF4D00]/20 disabled:opacity-50 text-orange-100 text-sm transition"
+                  >
+                    <FiEye size={14} /> Show Solution
+                  </button>
+                </div>
+
+                {/* Completion actions */}
+                {puzzleCompleted && (
+                  <div className="flex gap-2 mt-4">
+                    <button
+                      onClick={repeatPuzzle}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-black/40 border border-[#FF4D00]/30 hover:bg-[#FF4D00]/20 text-orange-100 text-sm transition"
+                    >
+                      <FiRefreshCw /> Repeat
+                    </button>
+                    {currentIndex < puzzles.length - 1 && (
+                      <button
+                        onClick={goToNextPuzzle}
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-[#FF4D00] to-[#FF0000] text-white text-sm font-semibold transition"
+                      >
+                        <FiArrowRight /> Next
+                      </button>
+                    )}
+                  </div>
+                )}
+              </motion.div>
+              {/* Skip Mode toggle */}
+              <div className="flex items-center gap-2 mt-3">
+                <span className="text-xs text-orange-200/80">Auto‑advance:</span>
+                <button
+                  onClick={() =>
+                    setSkipMode(prev =>
+                      prev === "manual" ? "automatic" : "manual"
+                    )
+                  }
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    skipMode === "automatic"
+                      ? "bg-[#FF4D00]"
+                      : "bg-black/40 border border-[#FF4D00]/30"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      skipMode === "automatic" ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+                <span className="text-xs text-orange-100/80 ml-1">
+                  {skipMode === "automatic" ? "Automatic" : "Manual"}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 };
 
 export default PuzzlesSetsTraining;
