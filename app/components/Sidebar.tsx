@@ -41,6 +41,7 @@ const routes: Route[] = [
   { path: '/main/squares-training/coordinations', icon: FiTarget, label: 'Squares Coordinations', chess: '♝' },
   { path: '/main/squares-training/colors', icon: FiDroplet, label: 'Squares Colors', chess: '♛' },
   { path: '/main/ai-chat-bot', icon: GiArtificialHive, label: 'AI Chat Bot', chess: '♛' },
+  { path: '/main/test', icon: GiArtificialHive, label: 'Test', chess: '♛' },
   { path: '/main/tutorials', icon: FiVideo, label: 'Tutorials', chess: '♚' },
 ];
 
