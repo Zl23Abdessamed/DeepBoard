@@ -1,34 +1,26 @@
 "use client"
 
-import React, { useState, useMemo, useCallback, lazy, Suspense } from 'react';
+import React, { useState, useMemo, useCallback, Suspense, useEffect } from 'react';
 import { Chess } from 'chess.js';
 import type { Square } from 'chess.js';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaChessKnight, FaChessQueen, FaChessRook, FaChessBishop, FaAngleLeft, FaAngleRight, FaStepBackward, FaStepForward } from 'react-icons/fa';
-import { FiCpu, FiUpload } from 'react-icons/fi';
+import { FiCpu, FiUpload, FiZap } from 'react-icons/fi';
 import type { ChessboardOptions, PieceRenderObject } from 'react-chessboard';
 import UploadPGNModal from '@/app/components/PgnModal';
 import dynamic from 'next/dynamic';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/app/redux/store';
 import { generateGeminiText, generateGroqText, generateOpenRouterText, generateCerebrasText } from '@/app/utils/ai';
+import { terminateCraftyEngine } from '@/app/utils/crafty-client';
+import { AnalysisResult, EngineChoice } from '@/app/types/types';
+import { generateLocalPieces } from '@/app/lib/board-ui';
 
 const LazyChessboard = dynamic(() =>
     import('react-chessboard').then((mod) => ({
         default: mod.Chessboard,
     })), { ssr: false }
 );
-
-// Analysis result from the server action
-interface AnalysisResult {
-    moveNumber: number;
-    fen: string;
-    san: string | null;
-    bestmove: string;
-    score: number | null; // centipawns
-    depth: number;
-    pv: string[];
-}
 
 const GameAnalyzer: React.FC = () => {
     // Game state
@@ -52,47 +44,32 @@ const GameAnalyzer: React.FC = () => {
     });
     const [showUploadModal, setShowUploadModal] = useState(false);
 
-
-    // PGN analysis integration
+    // PGN analysis integration (engine-agnostic)
     const [analysisResults, setAnalysisResults] = useState<AnalysisResult[] | null>(null);
     const [analysisLoading, setAnalysisLoading] = useState(false);
+    const [activeEngine, setActiveEngine] = useState<EngineChoice | null>(null);
+    const [craftyReady, setCraftyReady] = useState(false);
 
     const [aiExplanation, setAiExplanation] = useState<string | null>(null);
     const [aiLoading, setAiLoading] = useState(false);
     const [aiError, setAiError] = useState<string | null>(null);
 
+    // Crafty's WASM module loads lazily inside the worker the first time it's
+    // used. We mark it "ready" optimistically after mount so a status badge
+    // (shown only once Crafty has been selected/used) isn't stuck loading.
+    useEffect(() => {
+        const t = setTimeout(() => setCraftyReady(true), 0);
+        return () => clearTimeout(t);
+    }, []);
 
-    // Generate local piece images
-    const generateLocalPieces = (style: string) => {
-        const base = `/piece/${style}`;
-        const pieces = {
-            wP: `${base}/wP.svg`,
-            wN: `${base}/wN.svg`,
-            wB: `${base}/wB.svg`,
-            wR: `${base}/wR.svg`,
-            wQ: `${base}/wQ.svg`,
-            wK: `${base}/wK.svg`,
-            bP: `${base}/bP.svg`,
-            bN: `${base}/bN.svg`,
-            bB: `${base}/bB.svg`,
-            bR: `${base}/bR.svg`,
-            bQ: `${base}/bQ.svg`,
-            bK: `${base}/bK.svg`,
+    // Release the Crafty worker on unmount so we don't leak a WASM instance
+    // per navigation (harmless no-op if Crafty was never used).
+    useEffect(() => {
+        return () => {
+            terminateCraftyEngine();
         };
-        return Object.fromEntries(
-            Object.entries(pieces).map(([piece, src]) => [
-                piece,
-                ({ squareWidth }: { squareWidth: number }) => (
-                    <img
-                        src={src}
-                        alt={piece}
-                        style={{ width: squareWidth, height: squareWidth, objectFit: 'contain' }}
-                        draggable={true}
-                    />
-                ),
-            ])
-        ) as PieceRenderObject;
-    };
+    }, []);
+    
 
     // Move history pairs for display
     const moveHistory = useMemo(() => {
@@ -125,7 +102,6 @@ const GameAnalyzer: React.FC = () => {
 
     // Current position based on navigation
     const currentPosition = useMemo(() => {
-        // fenAtMoveIndex returns the correct position for every index, including -1
         return fenAtMoveIndex(currentMoveIndex);
     }, [fenAtMoveIndex, currentMoveIndex]);
 
@@ -316,14 +292,13 @@ const GameAnalyzer: React.FC = () => {
         setAnalysisResults(null);
     };
 
-    const handleAnalysisComplete = (results: AnalysisResult[]) => {
+    const handleAnalysisComplete = (results: AnalysisResult[], engine: EngineChoice) => {
         setAnalysisResults(results);
+        setActiveEngine(engine);
         setAnalysisLoading(false);
 
-        // ✅ FIX: Replay all moves from the analysis to populate the game state.
         const newGame = new Chess();
         results.forEach((r) => {
-            // moveNumber 0 is the start position with no move
             if (r.moveNumber > 0 && r.san) {
                 try {
                     newGame.move(r.san);
@@ -333,11 +308,9 @@ const GameAnalyzer: React.FC = () => {
             }
         });
         setGame(newGame);
-        // Navigate to the final position
         setCurrentMoveIndex(newGame.history().length - 1);
     };
 
-    // Get analysis for the current position
     // Get analysis for the current position
     const currentAnalysis = useMemo(() => {
         if (!analysisResults) return null;
@@ -346,24 +319,26 @@ const GameAnalyzer: React.FC = () => {
         return analysisResults[index];
     }, [analysisResults, currentMoveIndex]);
 
-    // Convert engine score to White's perspective
+    // Stockfish (server) returns a raw score relative to side-to-move, so we
+    // flip to White's perspective. Crafty's worker already normalizes to
+    // White's perspective, so no flip is needed there.
     const displayScore = useMemo(() => {
         if (!currentAnalysis || currentAnalysis.score === null) return null;
+        if (activeEngine === 'crafty') {
+            return currentAnalysis.score;
+        }
         const fen = currentAnalysis.fen;
         const sideToMove = fen.split(' ')[1]; // 'w' or 'b'
-        // If it's Black to move, flip the sign so the score always reflects White's advantage
         return sideToMove === 'b' ? -currentAnalysis.score : currentAnalysis.score;
-    }, [currentAnalysis]);
+    }, [currentAnalysis, activeEngine]);
 
     // Compute eval bar fill percentage (0 = black wins, 100 = white wins)
     const evalPercent = useMemo(() => {
         if (displayScore === null) return 50;
-        const score = displayScore; // now from White's perspective
-        // Mate handling
+        const score = displayScore;
         if (Math.abs(score) > 10000) {
             return score > 0 ? 95 : 5;
         }
-        // Centipawns → approximate win %
         const advantage = score / 100;
         const raw = 50 + advantage * 3.5;
         return Math.max(5, Math.min(95, raw));
@@ -385,7 +360,6 @@ const GameAnalyzer: React.FC = () => {
         setAiError(null);
         setAiExplanation(null);
 
-        // Build a context prompt for the AI
         const pgn = game.pgn();
         const evaluationSummary = analysisResults
             .map((m) => {
@@ -394,7 +368,8 @@ const GameAnalyzer: React.FC = () => {
             })
             .join('\n');
 
-        const prompt = `You are a chess coach. The user has just analyzed a chess game using Stockfish. Below is the complete PGN followed by a move-by-move analysis summary.
+        const engineName = activeEngine === 'crafty' ? 'Crafty' : 'Stockfish';
+        const prompt = `You are a chess coach. The user has just analyzed a chess game using the ${engineName} engine. Below is the complete PGN followed by a move-by-move analysis summary.
 
 PGN:
 ${pgn}
@@ -404,7 +379,6 @@ ${evaluationSummary}
 
 Please explain the key moments of this game in a clear, educational way. Highlight critical mistakes, brilliant moves, tactical themes, and suggest improvements. Keep it engaging and suitable for a club-level player.`;
 
-        // Try AI models in sequence
         const models = [
             { name: 'Gemini', generate: generateGeminiText },
             { name: 'Groq', generate: generateGroqText },
@@ -425,20 +399,31 @@ Please explain the key moments of this game in a clear, educational way. Highlig
             }
         }
 
-        // All models failed
         setAiError(`AI explanation failed: ${lastError}`);
         setAiLoading(false);
     };
 
+    const engineLabel = activeEngine === 'crafty' ? 'Crafty' : activeEngine === 'stockfish' ? 'Stockfish' : null;
+
     return (
         <div className="bg-black text-white min-h-screen p-6 overflow-hidden relative">
-            {/* Background glows – unchanged */}
+            {/* Background glows */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[#FF4D00]/20 rounded-full blur-3xl animate-pulse" />
                 <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-[#FF0000]/20 rounded-full blur-3xl animate-pulse delay-1000" />
             </div>
 
-            {/* Floating upload button – unchanged */}
+            {/* Engine status badge — shown once an engine has been used, esp. useful for Crafty's local load state */}
+            {activeEngine === 'crafty' && (
+                <div className="fixed top-6 left-6 z-40 flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/50 border border-[#FF4D00]/30 backdrop-blur-sm">
+                    <FiZap className={`text-sm ${craftyReady ? 'text-[#FF4D00]' : 'text-orange-400 animate-pulse'}`} />
+                    <span className="text-xs text-orange-100 font-medium">
+                        Crafty {craftyReady ? 'ready' : 'loading...'}
+                    </span>
+                </div>
+            )}
+
+            {/* Floating upload button */}
             <motion.button
                 className="fixed cursor-pointer top-6 right-6 z-40 p-3 bg-linear-to-r from-[#FF4D00] to-[#FF0000] rounded-full shadow-lg shadow-[#FF4D00]/30 hover:shadow-[#FF4D00]/50 transition-all"
                 whileHover={{ scale: 1.1 }}
@@ -461,7 +446,7 @@ Please explain the key moments of this game in a clear, educational way. Highlig
                 </motion.button>
             )}
 
-            {/* Upload PGN Modal – unchanged */}
+            {/* Upload PGN Modal — engine selectable inside */}
             <UploadPGNModal
                 isVisible={showUploadModal}
                 onClose={() => setShowUploadModal(false)}
@@ -470,13 +455,13 @@ Please explain the key moments of this game in a clear, educational way. Highlig
             />
 
             <div className="relative z-10 w-full max-w-7xl mx-auto space-y-6">
-                {/* Header – text size already responsive */}
+                {/* Header */}
                 <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
                     <h1 className="text-3xl md:text-4xl font-bold bg-linear-to-r from-[#FF4D00] to-[#FF0000] bg-clip-text text-transparent">
                         Game Analyzer
                     </h1>
                     <p className="text-orange-200/70 text-sm mt-1">
-                        Import or play moves to analyze positions
+                        Import or play moves to analyze positions — choose Stockfish or Crafty
                     </p>
                 </motion.div>
 
@@ -484,7 +469,6 @@ Please explain the key moments of this game in a clear, educational way. Highlig
                     {/* Board + Eval Bar */}
                     <div className="flex flex-col items-center gap-4 w-full lg:w-auto">
                         <div className="flex items-stretch gap-2 w-full justify-center">
-                            {/* Chessboard – now responsive width */}
                             <motion.div
                                 initial={{ opacity: 0, scale: 0.95 }}
                                 animate={{ opacity: 1, scale: 1 }}
@@ -501,7 +485,7 @@ Please explain the key moments of this game in a clear, educational way. Highlig
                                 </Suspense>
                             </motion.div>
 
-                            {/* Eval Bar – unchanged */}
+                            {/* Eval Bar */}
                             <div className="w-8 bg-black/30 rounded-r-xl border border-[#FF4D00]/30 border-l-0 overflow-hidden flex flex-col relative">
                                 <div className="absolute inset-0 bg-linear-to-t from-black/70 to-white/70 opacity-30" />
                                 <div
@@ -528,7 +512,7 @@ Please explain the key moments of this game in a clear, educational way. Highlig
 
                     {/* Right panel: Move History + Engine Analysis */}
                     <div className="flex-1 flex flex-col gap-4 w-full max-w-xl">
-                        {/* Move Navigation – unchanged */}
+                        {/* Move Navigation */}
                         <div className="flex justify-center gap-2">
                             <button onClick={goToStart} className="px-3 py-2 rounded-lg bg-black/40 border border-[#FF4D00]/30 hover:bg-[#FF4D00]/20 text-orange-100 font-bold transition" title="Go to start">
                                 <FaStepBackward />
@@ -547,7 +531,7 @@ Please explain the key moments of this game in a clear, educational way. Highlig
                             </span>
                         </div>
 
-                        {/* Move History – text size already small */}
+                        {/* Move History */}
                         <motion.div
                             initial={{ opacity: 0, x: 20 }}
                             animate={{ opacity: 1, x: 0 }}
@@ -586,16 +570,17 @@ Please explain the key moments of this game in a clear, educational way. Highlig
                             </div>
                         </motion.div>
 
-                        {/* Engine Analysis – text size already small */}
+                        {/* Engine Analysis */}
                         <motion.div
                             initial={{ opacity: 0, x: 20 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: 0.1 }}
                             className="p-4 rounded-2xl backdrop-blur-sm bg-linear-to-br from-[#FF4D00]/10 to-[#FF0000]/10 border border-[#FF4D00]/30 flex-1"
                         >
-                            <h2 className="text-lg font-bold text-orange-100 mb-3">Engine Analysis</h2>
+                            <h2 className="text-lg font-bold text-orange-100 mb-3">
+                                Engine Analysis{engineLabel ? ` (${engineLabel})` : ''}
+                            </h2>
 
-                            {/* Loading / empty states unchanged */}
                             {analysisLoading && (
                                 <div className="flex flex-col items-center justify-center py-8 space-y-3">
                                     <motion.div
@@ -603,7 +588,7 @@ Please explain the key moments of this game in a clear, educational way. Highlig
                                         transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
                                         className="w-10 h-10 border-4 border-[#FF4D00] border-t-transparent rounded-full"
                                     />
-                                    <p className="text-orange-200/70 text-sm">Running Stockfish analysis...</p>
+                                    <p className="text-orange-200/70 text-sm">Running engine analysis...</p>
                                 </div>
                             )}
 
@@ -654,7 +639,7 @@ Please explain the key moments of this game in a clear, educational way. Highlig
                             )}
                         </motion.div>
 
-                        {/* AI Explanation – placed right after Engine Analysis */}
+                        {/* AI Explanation */}
                         {(aiLoading || aiExplanation || aiError) && (
                             <motion.div
                                 initial={{ opacity: 0, y: 10 }}
@@ -689,7 +674,7 @@ Please explain the key moments of this game in a clear, educational way. Highlig
                 </div>
             </div>
 
-            {/* Promotion Dialog – unchanged */}
+            {/* Promotion Dialog */}
             <AnimatePresence>
                 {showPromotionDialog && (
                     <motion.div

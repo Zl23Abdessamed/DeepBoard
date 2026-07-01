@@ -1,14 +1,43 @@
+'use client';
+
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { FiChevronDown } from 'react-icons/fi';
 import { analyzePgn } from '../utils/server-actions';
-// Adjust this import path to match your file structure
+import { analyzePgnCrafty } from '../utils/crafty-client';
+import { AnalysisResult, EngineChoice } from '../types/types';
+
+
 
 interface UploadPGNModalProps {
   isVisible: boolean;
   onClose: () => void;
   onAnalysisStart: () => void;
-  onAnalysisComplete: (results: any[]) => void;
+  onAnalysisComplete: (results: AnalysisResult[], engine: EngineChoice) => void;
 }
+
+const ENGINE_OPTIONS: {
+  value: EngineChoice;
+  label: string;
+  helper: string;
+  defaultDepth: number;
+  maxDepth: number;
+}[] = [
+  {
+    value: 'stockfish',
+    label: 'Stockfish (server)',
+    helper: 'Runs server-side. Handles higher depths comfortably.',
+    defaultDepth: 16,
+    maxDepth: 40,
+  },
+  {
+    value: 'crafty',
+    label: 'Crafty (in-browser WASM)',
+    helper: 'Runs locally in your browser. Try 8–12 for a full game.',
+    defaultDepth: 10,
+    maxDepth: 20,
+  },
+];
 
 const UploadPGNModal: React.FC<UploadPGNModalProps> = ({
   isVisible,
@@ -17,39 +46,57 @@ const UploadPGNModal: React.FC<UploadPGNModalProps> = ({
   onAnalysisComplete,
 }) => {
   const [pgnText, setPgnText] = useState('');
-  const [depthValue, setDepthValue] = useState(16);
+  const [engine, setEngine] = useState<EngineChoice>('stockfish');
+  const [depthValue, setDepthValue] = useState(ENGINE_OPTIONS[0].defaultDepth);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+
+  const activeEngine = ENGINE_OPTIONS.find((e) => e.value === engine)!;
+
+  const handleEngineChange = (value: EngineChoice) => {
+    setEngine(value);
+    const opt = ENGINE_OPTIONS.find((e) => e.value === value)!;
+    setDepthValue(opt.defaultDepth);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    
+
     if (!pgnText.trim()) {
       setError('Please paste a PGN game.');
       return;
     }
-    
+
     setLoading(true);
     setStatus('idle');
-    
-    // Notify parent component that calculation has begun
+    setProgress(null);
+
     onAnalysisStart();
 
     try {
-      // Execute server-side analysis with chosen depth
-      const results = await analyzePgn(pgnText, depthValue);
-      
+      let results: AnalysisResult[];
+
+      if (engine === 'crafty') {
+        // Runs entirely in the browser via a Web Worker wrapping Crafty WASM.
+        results = await analyzePgnCrafty(pgnText, depthValue, (_result, index, total) => {
+          setProgress({ done: index + 1, total });
+        });
+      } else {
+        // Server-side Stockfish analysis.
+        results = await analyzePgn(pgnText, depthValue);
+      }
+
       setStatus('success');
       setPgnText('');
-      
-      // Pass the computed chess engine metrics back to parent dashboard
-      onAnalysisComplete(results);
-      
+      onAnalysisComplete(results, engine);
+
       setTimeout(() => {
         onClose();
         setStatus('idle');
+        setProgress(null);
       }, 2000);
     } catch (err: any) {
       setStatus('error');
@@ -96,10 +143,34 @@ const UploadPGNModal: React.FC<UploadPGNModalProps> = ({
               Analyze PGN
             </h2>
             <p className="text-sm text-orange-200/70 text-center mb-6">
-              Paste your game in PGN format for Stockfish server-side analysis.
+              Paste your game in PGN format and pick an engine to analyze it.
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Engine Selector */}
+              <div className="space-y-1.5">
+                <label htmlFor="engine-select" className="text-orange-200/80 text-sm font-medium">
+                  Engine
+                </label>
+                <div className="relative">
+                  <select
+                    id="engine-select"
+                    value={engine}
+                    disabled={loading}
+                    onChange={(e) => handleEngineChange(e.target.value as EngineChoice)}
+                    className="w-full appearance-none px-4 py-3 pr-10 bg-black/40 border border-[#FF4D00]/30 rounded-xl text-orange-100 text-sm font-medium focus:border-[#FF4D00]/60 focus:outline-none transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    {ENGINE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value} className="bg-black text-orange-100">
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  <FiChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#FF4D00] text-lg" />
+                </div>
+                <p className="text-xs text-orange-200/40">{activeEngine.helper}</p>
+              </div>
+
               {/* PGN Textarea */}
               <textarea
                 value={pgnText}
@@ -119,13 +190,35 @@ const UploadPGNModal: React.FC<UploadPGNModalProps> = ({
                   id="depth-input"
                   type="number"
                   min={1}
-                  max={40}
+                  max={activeEngine.maxDepth}
                   disabled={loading}
                   value={depthValue}
                   onChange={(e) => setDepthValue(Number(e.target.value))}
                   className="w-16 px-2 py-1 rounded bg-black/50 border border-[#FF4D00]/30 text-orange-100 text-sm focus:border-[#FF4D00]/60 focus:outline-none transition-colors disabled:opacity-50 text-center font-semibold"
                 />
               </div>
+              {engine === 'crafty' && (
+                <p className="text-xs text-orange-200/40 -mt-3">
+                  Higher depths run noticeably slower in-browser than on a native engine — try 8–12 for a full game.
+                </p>
+              )}
+
+              {/* Progress (Crafty only — Stockfish resolves server-side in one shot) */}
+              {loading && engine === 'crafty' && progress && (
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs text-orange-200/60">
+                    <span>Analyzing position {progress.done} of {progress.total}</span>
+                    <span>{Math.round((progress.done / progress.total) * 100)}%</span>
+                  </div>
+                  <div className="w-full h-2 rounded-full bg-black/40 overflow-hidden">
+                    <motion.div
+                      className="h-full bg-linear-to-r from-[#FF4D00] to-[#FF0000]"
+                      animate={{ width: `${(progress.done / progress.total) * 100}%` }}
+                      transition={{ duration: 0.2 }}
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Error message */}
               {error && (

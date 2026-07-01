@@ -9,20 +9,13 @@ import { useSelector } from "react-redux";
 import type { ChessboardOptions, PieceRenderObject } from "react-chessboard";
 import dynamic from "next/dynamic";
 import { RootState } from "@/app/redux/store";
+import { PuzzleLocal } from "@/app/types/types";
+import { getPuzzleStreak } from "@/app/utils/api";
 
 const LazyChessboard = dynamic(
     () => import("react-chessboard").then((mod) => ({ default: mod.Chessboard })),
     { ssr: false }
 );
-
-// ---------- Types ----------
-type PuzzleLocal = {
-    puzzle_id: string;
-    fen_for_player: string;
-    first_opponent_move_uci: string;
-    solution_moves_uci: string[];
-    rating: number;
-};
 
 // ---------- Helpers ----------
 const generateLocalPieces = (style: string): PieceRenderObject => {
@@ -122,29 +115,6 @@ const PuzzlesStreakTraining: React.FC = () => {
         }
     }, [puzzleCompleted, skipMode, currentIndex, puzzles.length, streakBroken]);
 
-    // Fetch puzzles from the streak endpoint
-    const fetchPuzzles = async (rating: number, count: number): Promise<PuzzleLocal[]> => {
-        const params = new URLSearchParams();
-        params.set("rating", String(rating));
-        params.set("limit", String(count));
-        const res = await fetch(`/api/puzzles/streak?${params.toString()}`);
-        if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.error || "Failed to fetch puzzles");
-        }
-        const data = await res.json();
-        return data.map((p: any) => {
-            const allMoves: string[] = p.moves ? p.moves.split(" ") : [];
-            return {
-                puzzle_id: p.id,
-                fen_for_player: p.fen,
-                first_opponent_move_uci: allMoves[0] || "",
-                solution_moves_uci: allMoves.slice(1),
-                rating: p.rating,
-            };
-        });
-    };
-
     // Load puzzle (apply opponent move)
     const loadPuzzle = useCallback((puzzle: PuzzleLocal) => {
         const game = new Chess(puzzle.fen_for_player);
@@ -171,7 +141,7 @@ const PuzzlesStreakTraining: React.FC = () => {
         setFetchLoading(true);
         setFeedback("");
         try {
-            const fetched = await fetchPuzzles(startRating, puzzleCount);
+            const fetched = await getPuzzleStreak(startRating, puzzleCount);
             if (fetched.length === 0) {
                 setFeedback("No puzzles found for this rating.");
                 setFetchLoading(false);
@@ -220,7 +190,7 @@ const PuzzlesStreakTraining: React.FC = () => {
         const newRating = Math.max(0, currentPuzzle.rating - 50);
         setFetchLoading(true);
         try {
-            const fetched = await fetchPuzzles(newRating, puzzleCount);
+            const fetched = await getPuzzleStreak(newRating, puzzleCount);
             if (fetched.length === 0) {
                 setFeedback("No puzzles found. Try a higher rating?");
                 setFetchLoading(false);

@@ -10,8 +10,14 @@ import {
   FaChessRook,
   FaChessBishop,
 } from 'react-icons/fa';
+import { FiChevronDown, FiZap } from 'react-icons/fi';
 import dynamic from 'next/dynamic';
 import { getEngineMove } from '@/app/utils/server-actions';
+import { getEngineMoveCrafty, terminateCraftyEngine } from '@/app/utils/crafty-client';
+import { RootState } from '@/app/redux/store';
+import { useSelector } from 'react-redux';
+import { generateLocalPieces } from '@/app/lib/board-ui';
+import { EngineChoice } from '@/app/types/types';
 
 const LazyChessboard = dynamic(
   () => import('react-chessboard').then((mod) => ({ default: mod.Chessboard })),
@@ -41,6 +47,32 @@ interface AnalysisLine {
   depth: number;
   pv: string[];
 }
+
+// ------------------------------------------------------
+// Engine options (mirrors UploadPGNModal)
+// ------------------------------------------------------
+const ENGINE_OPTIONS: {
+  value: EngineChoice;
+  label: string;
+  helper: string;
+  defaultDepth: number;
+  maxDepth: number;
+}[] = [
+  {
+    value: 'stockfish',
+    label: 'Stockfish (server)',
+    helper: 'Runs server-side. Skill level 1–20 tunes its strength.',
+    defaultDepth: 15,
+    maxDepth: 30,
+  },
+  {
+    value: 'crafty',
+    label: 'Crafty (in-browser WASM)',
+    helper: 'Runs locally in your browser. Skill level is approximated via search depth.',
+    defaultDepth: 10,
+    maxDepth: 20,
+  },
+];
 
 // ------------------------------------------------------
 // Promotion dialog
@@ -103,12 +135,39 @@ function parseTimeControl(tc: string) {
 const TIME_CONTROLS = ['1+0', '3+0', '5+0', '10+0', '15+10', '30+0', '30+20'];
 
 export default function PlayVsEngine() {
+  const reduxBoard = useSelector((state: RootState) => state.boardSettings);
   // ---- Setup state ----
   const [setupComplete, setSetupComplete] = useState(false);
   const [timeControl, setTimeControl] = useState(TIME_CONTROLS[2]); // default 5+0
   const [side, setSide] = useState<'white' | 'black' | 'random'>('random');
-  const [depth, setDepth] = useState(15);
+  const [engine, setEngine] = useState<EngineChoice>('stockfish');
+  const [depth, setDepth] = useState(ENGINE_OPTIONS[0].defaultDepth);
   const [skillLevel, setSkillLevel] = useState(20); // 1-20
+  const [craftyReady, setCraftyReady] = useState(false);
+
+  const activeEngineOption = ENGINE_OPTIONS.find((e) => e.value === engine)!;
+
+  const handleEngineChange = (value: EngineChoice) => {
+    setEngine(value);
+    const opt = ENGINE_OPTIONS.find((e) => e.value === value)!;
+    setDepth(opt.defaultDepth);
+  };
+
+  // Crafty's WASM module loads lazily inside the worker the first time it's
+  // used. Mark it "ready" optimistically after mount so the status badge
+  // (shown only once Crafty is selected) isn't stuck loading.
+  useEffect(() => {
+    const t = setTimeout(() => setCraftyReady(true), 0);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Release the Crafty worker on unmount so we don't leak a WASM instance
+  // per navigation (harmless no-op if Crafty was never used).
+  useEffect(() => {
+    return () => {
+      terminateCraftyEngine();
+    };
+  }, []);
 
   // ---- Game state ----
   const [game, setGame] = useState(new Chess());
@@ -117,6 +176,7 @@ export default function PlayVsEngine() {
   const [status, setStatus] = useState<string | null>(null);
   const [evalScore, setEvalScore] = useState<number | null>(null);
   const [gameOver, setGameOver] = useState(false);
+  const [engineError, setEngineError] = useState<string | null>(null);
 
   // ---- Clocks ----
   const [whiteTime, setWhiteTime] = useState(0); // in seconds
@@ -205,6 +265,7 @@ export default function PlayVsEngine() {
     setPlayerColor(chosenColor);
     setSetupComplete(true);
     setGame(new Chess());
+    setEngineError(null);
 
     const { minutes } = parseTimeControl(timeControl);
     startClocks(minutes, 0); // increment handled separately
@@ -214,7 +275,7 @@ export default function PlayVsEngine() {
     }
   };
 
-  // ---- Engine move ----
+  // ---- Engine move (dispatches to Stockfish or Crafty) ----
   const makeEngineMove = useCallback(
     async (currentGame: Chess) => {
       if (currentGame.isGameOver()) {
@@ -222,31 +283,71 @@ export default function PlayVsEngine() {
         return;
       }
       setEngineThinking(true);
+      setEngineError(null);
       try {
-        const response: EngineResponse = await getEngineMove(currentGame.fen(), depth, skillLevel);
-        const uci = response.bestmove;
-        const from = uci.slice(0, 2) as Square;
-        const to = uci.slice(2, 4) as Square;
-        const promotion = uci.length > 4 ? uci[4] : undefined;
+        const response: EngineResponse =
+          engine === 'crafty'
+            ? await getEngineMoveCrafty(currentGame.fen(), depth, skillLevel)
+            : await getEngineMove(currentGame.fen(), depth, skillLevel);
 
+        const raw = (response.bestmove || '').trim();
         const newGame = new Chess(currentGame.fen());
-        const move = newGame.move({ from, to, promotion });
+
+        // Stockfish returns plain long-algebraic UCI ("e2e4", "e7e8q"), so a
+        // fixed slice works. Crafty's worker does not reliably return that
+        // exact shape (its raw output is closer to piece-letter coordinate
+        // notation than pure UCI), so instead of slicing blindly we extract
+        // every square-like token (e.g. "e2", "e4") from the string and
+        // match the first legal move whose from/to pair appears in order.
+        // This tolerates piece-letter prefixes, dashes, captures ('x'),
+        // check/mate suffixes, or promotion suffixes.
+        const squareTokens = raw.toLowerCase().match(/[a-h][1-8]/g) || [];
+        const promoMatch = raw.toLowerCase().match(/[qrbn](?:\s|$|[+#!?])/);
+        const promotion = promoMatch ? promoMatch[0][0] : undefined;
+
+        let move = null;
+        if (squareTokens.length >= 2) {
+          const [from, to] = squareTokens as [Square, Square];
+          const legalMoves = newGame.moves({ square: from, verbose: true });
+          const candidate = legalMoves.find((m) => m.to === to);
+          if (candidate) {
+            move = newGame.move({
+              from,
+              to,
+              promotion: candidate.promotion ? promotion || 'q' : undefined,
+            });
+          }
+        }
+
+        // Fallback: try chess.js's SAN parser directly in case the engine
+        // returned SAN (e.g. "Nc6") rather than coordinate notation.
         if (!move) {
-          console.error('Engine returned invalid move:', uci);
+          try {
+            move = newGame.move(raw);
+          } catch {
+            move = null;
+          }
+        }
+
+        if (!move) {
+          console.error('Engine returned unparseable/invalid move:', raw);
+          setEngineError(`${engine === 'crafty' ? 'Crafty' : 'Stockfish'} returned an invalid move ("${raw}").`);
           setEngineThinking(false);
           return;
         }
+
         setGame(newGame);
         setEvalScore(response.score);
 
         checkGameOver(newGame);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Engine error:', err);
+        setEngineError(err?.message || 'Engine failed to respond.');
       } finally {
         setEngineThinking(false);
       }
     },
-    [depth, skillLevel]
+    [depth, skillLevel, engine]
   );
 
   // ---- User move ----
@@ -401,6 +502,20 @@ export default function PlayVsEngine() {
     }
   };
 
+  // Rematch / change settings — also tears down any in-flight Crafty work
+  const handleNewGame = () => {
+    terminateCraftyEngine();
+    setSetupComplete(false);
+    setGame(new Chess());
+    setGameOver(false);
+    setStatus(null);
+    setEvalScore(null);
+    setEngineError(null);
+    setAnalysisLines(null);
+    setMoveFrom(null);
+    setOptionSquares({});
+  };
+
   // Format time (seconds → mm:ss)
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -429,7 +544,8 @@ export default function PlayVsEngine() {
   }, [evalScore]);
 
   // Board options
-  const boardOptions = {
+  // Board options (Redux + generateLocalPieces)
+  const boardOptions = useMemo(() => ({
     id: 'PlayVsEngineBoard',
     boardOrientation: playerColor,
     position: game.fen(),
@@ -437,25 +553,13 @@ export default function PlayVsEngine() {
     onSquareClick: onSquareClick,
     animationDurationInMs: 300,
     showAnimations: true,
-    darkSquareStyle: { backgroundColor: '#769656' },
-    lightSquareStyle: { backgroundColor: '#eeeed2' },
-    pieces: (() => {
-      const base = '/piece/cburnett';
-      const pieces: any = {};
-      ['wP', 'wN', 'wB', 'wR', 'wQ', 'wK', 'bP', 'bN', 'bB', 'bR', 'bQ', 'bK'].forEach((p) => {
-        pieces[p] = ({ squareWidth }: { squareWidth: number }) => (
-          <img
-            src={`${base}/${p}.svg`}
-            alt={p}
-            style={{ width: squareWidth, height: squareWidth, objectFit: 'contain' }}
-            draggable={true}
-          />
-        );
-      });
-      return pieces;
-    })(),
+    darkSquareStyle: { backgroundColor: reduxBoard.darkSquareColor },
+    lightSquareStyle: { backgroundColor: reduxBoard.lightSquareColor },
+    pieces: generateLocalPieces(reduxBoard.pieceStyle),
     squareStyles: { ...optionSquares },
-  };
+  }), [playerColor, game, onDrop, onSquareClick, reduxBoard, optionSquares]);
+
+  const engineLabel = engine === 'crafty' ? 'Crafty' : 'Stockfish';
 
   // ---- Render ----
   return (
@@ -466,10 +570,20 @@ export default function PlayVsEngine() {
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-[#FF0000]/20 rounded-full blur-3xl animate-pulse delay-1000" />
       </div>
 
+      {/* Engine status badge — shown once a game vs Crafty has started */}
+      {setupComplete && engine === 'crafty' && (
+        <div className="fixed top-6 left-6 z-40 flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/50 border border-[#FF4D00]/30 backdrop-blur-sm">
+          <FiZap className={`text-sm ${craftyReady ? 'text-[#FF4D00]' : 'text-orange-400 animate-pulse'}`} />
+          <span className="text-xs text-orange-100 font-medium">
+            Crafty {craftyReady ? 'ready' : 'loading...'}
+          </span>
+        </div>
+      )}
+
       <div className="relative z-10 max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <h1 className="text-3xl md:text-4xl font-bold bg-linear-to-r from-[#FF4D00] to-[#FF0000] bg-clip-text text-transparent">
-          Play vs Stockfish 17.1
+          Play vs {engineLabel}
         </h1>
 
         {!setupComplete ? (
@@ -481,6 +595,29 @@ export default function PlayVsEngine() {
             className="max-w-md mx-auto p-6 rounded-2xl backdrop-blur-sm bg-linear-to-br from-[#FF4D00]/10 to-[#FF0000]/10 border border-[#FF4D00]/30 space-y-5"
           >
             <h2 className="text-xl font-bold text-orange-100">Game Settings</h2>
+
+            {/* Engine Selector */}
+            <div className="space-y-1.5">
+              <label htmlFor="engine-select" className="block text-sm text-orange-200/80">
+                Engine
+              </label>
+              <div className="relative">
+                <select
+                  id="engine-select"
+                  value={engine}
+                  onChange={(e) => handleEngineChange(e.target.value as EngineChoice)}
+                  className="w-full appearance-none px-4 py-3 pr-10 bg-black/40 border border-[#FF4D00]/30 rounded-xl text-orange-100 text-sm font-medium focus:border-[#FF4D00]/60 focus:outline-none transition-colors cursor-pointer"
+                >
+                  {ENGINE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value} className="bg-black text-orange-100">
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <FiChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#FF4D00] text-lg" />
+              </div>
+              <p className="text-xs text-orange-200/40">{activeEngineOption.helper}</p>
+            </div>
 
             {/* Time Control */}
             <div>
@@ -520,15 +657,22 @@ export default function PlayVsEngine() {
 
             {/* Depth */}
             <div>
-              <label className="block text-sm text-orange-200/80 mb-1">Depth</label>
+              <label className="block text-sm text-orange-200/80 mb-1">
+                Depth (max {activeEngineOption.maxDepth})
+              </label>
               <input
                 type="number"
                 min={1}
-                max={30}
+                max={activeEngineOption.maxDepth}
                 value={depth}
                 onChange={(e) => setDepth(Number(e.target.value))}
                 className="w-full bg-black/40 border border-[#FF4D00]/30 rounded-lg py-2 px-3 text-orange-100 text-sm"
               />
+              {engine === 'crafty' && (
+                <p className="text-xs text-orange-200/40 mt-1">
+                  Higher depths run noticeably slower in-browser — 8–12 keeps moves snappy.
+                </p>
+              )}
             </div>
 
             {/* Skill Level */}
@@ -548,6 +692,11 @@ export default function PlayVsEngine() {
                 <span>Beginner</span>
                 <span>Grandmaster</span>
               </div>
+              {engine === 'crafty' && (
+                <p className="text-xs text-orange-200/40 mt-1">
+                  Crafty has no native skill setting — this scales search depth to approximate it.
+                </p>
+              )}
             </div>
 
             <motion.button
@@ -602,18 +751,33 @@ export default function PlayVsEngine() {
                 </div> */}
               </div>
 
+              {/* Engine error */}
+              {engineError && (
+                <div className="text-[#FF0000] text-sm text-center font-medium bg-red-950/30 py-2 px-3 rounded-lg border border-red-500/20 w-full max-w-[90vw] md:max-w-[500px]">
+                  {engineError}
+                </div>
+              )}
+
               {/* Game status / engine thinking */}
               {status && (
                 <div className="p-3 rounded-xl bg-linear-to-br from-[#FF4D00]/20 to-[#FF0000]/20 border border-[#FF4D00]/30 text-center w-full max-w-[90vw] md:max-w-[500px]">
                   <span className="font-bold text-orange-100">{status}</span>
                   {gameOver && (
-                    <button
-                      onClick={handleAnalyze}
-                      disabled={analysisLoading}
-                      className="ml-4 px-4 py-1 rounded-lg bg-linear-to-r from-[#FF4D00] to-[#FF0000] text-white text-sm font-semibold disabled:opacity-50"
-                    >
-                      {analysisLoading ? 'Analyzing...' : 'Analyze Game'}
-                    </button>
+                    <div className="mt-2 flex items-center justify-center gap-3">
+                      <button
+                        onClick={handleAnalyze}
+                        disabled={analysisLoading}
+                        className="px-4 py-1 rounded-lg bg-linear-to-r from-[#FF4D00] to-[#FF0000] text-white text-sm font-semibold disabled:opacity-50"
+                      >
+                        {analysisLoading ? 'Analyzing...' : 'Analyze Game'}
+                      </button>
+                      <button
+                        onClick={handleNewGame}
+                        className="px-4 py-1 rounded-lg bg-black/40 border border-[#FF4D00]/30 hover:bg-[#FF4D00]/20 text-orange-100 text-sm font-semibold transition"
+                      >
+                        New Game
+                      </button>
+                    </div>
                   )}
                 </div>
               )}
@@ -624,7 +788,7 @@ export default function PlayVsEngine() {
                     transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
                     className="w-4 h-4 border-2 border-[#FF4D00] border-t-transparent rounded-full"
                   />
-                  Engine thinking...
+                  {engineLabel} thinking...
                 </div>
               )}
             </div>

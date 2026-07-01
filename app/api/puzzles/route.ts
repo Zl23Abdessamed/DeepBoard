@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getPuzzleShard } from '@/app/db';            // your shard helper
 import { puzzles } from '@/app/db/schema';
 import { and, or, gte, lte, ilike, sql } from 'drizzle-orm';
-import type { Rating } from '@/types/types';           // adjust path as needed
+import type { Rating } from '@/app/types/types';           // adjust path as needed
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);

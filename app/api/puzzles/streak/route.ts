@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getPuzzleShard } from '@/app/db';
 import { puzzles } from '@/app/db/schema';
 import { gte } from 'drizzle-orm';
-import type { Rating } from '@/types/types';
+import type { Rating } from '@/app/types/types';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);

@@ -11,19 +11,14 @@ import dynamic from "next/dynamic";
 import { RootState } from "@/app/redux/store";
 import chessOpenings from "@/app/utils/openings";
 import chessThemes from "@/app/utils/themes";
+import { PuzzleLocal } from "@/app/types/types";
+import { getPuzzleSet } from "@/app/utils/api";
 
 const LazyChessboard = dynamic(
     () => import("react-chessboard").then((mod) => ({ default: mod.Chessboard })),
     { ssr: false }
 );
 
-// ---------- Types ----------
-type PuzzleLocal = {
-    puzzle_id: string;
-    fen_for_player: string;
-    first_opponent_move_uci: string;
-    solution_moves_uci: string[];
-};
 
 // ---------- Level presets ----------
 const LEVEL_PRESETS: Record<
@@ -285,36 +280,6 @@ const PuzzlesSetsTraining: React.FC = () => {
         }
     };
 
-    // Fetch puzzles from API
-    const fetchPuzzles = async (): Promise<PuzzleLocal[]> => {
-        const tier = LEVEL_PRESETS[level].tier;
-        const params = new URLSearchParams();
-        params.set("tier", tier);
-        params.set("min", String(minRating));
-        params.set("max", String(maxRating));
-        params.set("limit", String(puzzleCount));
-        if (selectedThemes.length) params.set("themes", selectedThemes.join(","));
-        if (selectedOpenings.length) params.set("opening_tags", selectedOpenings.join(","));
-
-        const res = await fetch(`/api/puzzles?${params.toString()}`);
-        if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.error || "Failed to fetch puzzles");
-        }
-        const data = await res.json();
-        return data.map((p: any) => {
-            const allMoves: string[] = p.moves ? p.moves.split(" ") : [];
-            const firstOpponentMove = allMoves[0] || "";
-            const solutionMoves = allMoves.slice(1); // start with player's move
-            return {
-                puzzle_id: p.id,
-                fen_for_player: p.fen,               // keep the original FEN (before opponent move)
-                first_opponent_move_uci: firstOpponentMove,
-                solution_moves_uci: solutionMoves,
-            };
-        });
-    };
-
     // Load a specific puzzle into the board (reset state)
     const loadPuzzle = useCallback((puzzle: PuzzleLocal) => {
         const game = new Chess(puzzle.fen_for_player); // start from position before opponent move
@@ -344,25 +309,34 @@ const PuzzlesSetsTraining: React.FC = () => {
 
     // Initialize solving
     const startSolving = async () => {
-        setFetchLoading(true);
-        setFeedback("");
-        try {
-            const fetched = await fetchPuzzles();
-            if (fetched.length === 0) {
-                setFeedback("No puzzles found for the selected criteria.");
-                setFetchLoading(false);
-                return;
-            }
-            setPuzzles(fetched);
-            setCurrentIndex(0);
-            setPhase("solving");
-            loadPuzzle(fetched[0]);
-        } catch (err: any) {
-            setFeedback(err.message || "Error fetching puzzles");
-        } finally {
-            setFetchLoading(false);
+    setFetchLoading(true);
+    setFeedback("");
+
+    try {
+        const fetched = await getPuzzleSet({
+            tier: LEVEL_PRESETS[level].tier,
+            minRating,
+            maxRating,
+            puzzleCount,
+            selectedThemes,
+            selectedOpenings,
+        });
+
+        if (fetched.length === 0) {
+            setFeedback("No puzzles found for the selected criteria.");
+            return;
         }
-    };
+
+        setPuzzles(fetched);
+        setCurrentIndex(0);
+        setPhase("solving");
+        loadPuzzle(fetched[0]);
+    } catch (err: any) {
+        setFeedback(err.message || "Error fetching puzzles");
+    } finally {
+        setFetchLoading(false);
+    }
+};
 
     // Move to next puzzle
     const goToNextPuzzle = () => {
